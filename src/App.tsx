@@ -1,7 +1,7 @@
 import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { auth, db, signInWithGoogle, handleFirestoreError, OperationType } from './firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { collection, onSnapshot, query, where, addDoc, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, addDoc, deleteDoc, doc, serverTimestamp, setDoc, getDocFromServer } from 'firebase/firestore';
 import { Song, Playlist, Favorite, History, ApiKey } from './types';
 import { 
   Play, Pause, SkipBack, SkipForward, Search, Heart, ListMusic, 
@@ -57,15 +57,16 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<SonicStreamApp />} />
-        <Route path="/play/:videoId" element={<SonicStreamApp />} />
+        <Route path="/" element={<CMusicApp />} />
+        <Route path="/play/:videoId" element={<CMusicApp />} />
       </Routes>
     </BrowserRouter>
   );
 }
 
-function SonicStreamApp() {
+function CMusicApp() {
   const [user, setUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -98,7 +99,8 @@ function SonicStreamApp() {
 
   const isAdmin = user && (
     user.email === "shubhamnm671@gmail.com" || 
-    user.email === "saigomonarch0@gmail.com"
+    user.email === "saigomonarch0@gmail.com" ||
+    userRole === 'admin'
   );
 
   // Sync currentSong with URL
@@ -137,18 +139,28 @@ function SonicStreamApp() {
       setLoading(false);
       
       if (user) {
-        // Sync user profile to Firestore
+        // Sync user profile to Firestore and fetch role
         try {
-          await setDoc(doc(db, 'users', user.uid), {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDocFromServer(userDocRef);
+          
+          if (userDoc.exists()) {
+            setUserRole(userDoc.data().role || 'user');
+          } else {
+            setUserRole('user');
+          }
+
+          await setDoc(userDocRef, {
             uid: user.uid,
             email: user.email,
             displayName: user.displayName,
             photoURL: user.photoURL,
-            // Don't overwrite role if it already exists
           }, { merge: true });
         } catch (error) {
           console.error("Failed to sync user profile:", error);
         }
+      } else {
+        setUserRole(null);
       }
     });
     return unsubscribe;
@@ -484,7 +496,7 @@ function SonicStreamApp() {
               <Music size={18} className="text-white sm:hidden" />
               <Music size={24} className="text-white hidden sm:block" />
             </div>
-            <h1 className="text-lg sm:text-xl font-bold tracking-tight font-serif italic hidden xs:block">SonicStream</h1>
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight font-serif italic hidden xs:block">CMusic</h1>
           </div>
 
           <div className="flex-1 max-w-2xl mx-2 sm:mx-12">
@@ -613,7 +625,7 @@ function SonicStreamApp() {
                       <div className="w-8 h-8 bg-[#ff4e00] rounded-lg flex items-center justify-center">
                         <Music size={18} className="text-white" />
                       </div>
-                      <h1 className="text-lg font-bold font-serif italic">SonicStream</h1>
+                      <h1 className="text-lg font-bold font-serif italic">CMusic</h1>
                     </div>
                     <button onClick={() => setShowMobileMenu(false)} className="p-2 text-white/40">
                       <X size={20} />
@@ -1164,7 +1176,7 @@ function SonicStreamApp() {
         {/* Modals */}
         <Modal show={showImportModal} onClose={() => { setShowImportModal(false); setImportError(null); }} title="Import YouTube Playlist">
           <div className="space-y-4">
-            <p className="text-sm text-white/60">Paste a YouTube playlist link to import all songs into a new SonicStream playlist.</p>
+            <p className="text-sm text-white/60">Paste a YouTube playlist link to import all songs into a new CMusic playlist.</p>
             <input 
               type="text" 
               placeholder="https://www.youtube.com/playlist?list=..."
