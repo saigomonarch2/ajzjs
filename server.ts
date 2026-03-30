@@ -108,10 +108,12 @@ async function startServer() {
   // Internal API Routes (Used by the web app)
   app.get("/api/search", async (req, res) => {
     const query = req.query.q as string;
+    console.log(`Search request received for: "${query}"`);
     if (!query) return res.status(400).json({ error: "Query is required" });
 
     try {
       const r = await yts(query);
+      console.log(`Search results found: ${r.videos.length} videos`);
       const videos = r.videos.slice(0, 20).map(v => ({
         id: v.videoId,
         title: v.title,
@@ -122,7 +124,7 @@ async function startServer() {
       }));
       res.json(videos);
     } catch (error) {
-      console.error("Search error:", error);
+      console.error("Search error details:", error);
       res.status(500).json({ error: "Failed to search YouTube" });
     }
   });

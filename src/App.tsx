@@ -263,17 +263,42 @@ function CMusicApp() {
     syncPlayer();
   }, [isPlaying, currentSong, playerReady]);
 
+  // Initial search for trending music
+  useEffect(() => {
+    const fetchInitialMusic = async () => {
+      setIsSearching(true);
+      try {
+        const response = await axios.get('/api/search?q=trending%20music');
+        if (Array.isArray(response.data)) {
+          setSearchResults(response.data);
+        }
+      } catch (error) {
+        console.error("Initial search error:", error);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+    fetchInitialMusic();
+  }, []);
+
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
 
+    console.log(`Frontend: Searching for "${searchQuery}"...`);
     setIsSearching(true);
     try {
       const response = await axios.get(`/api/search?q=${encodeURIComponent(searchQuery)}`);
-      setSearchResults(response.data);
+      console.log(`Frontend: Search results received:`, response.data);
+      if (Array.isArray(response.data)) {
+        setSearchResults(response.data);
+      } else {
+        console.error("Frontend: Search results are not an array:", response.data);
+        setSearchResults([]);
+      }
       setActiveTab('search');
     } catch (error) {
-      console.error("Search error:", error);
+      console.error("Frontend: Search error:", error);
     } finally {
       setIsSearching(false);
     }
@@ -731,11 +756,21 @@ function CMusicApp() {
                         </div>
                       ))}
                     </div>
-                  ) : (
+                  ) : searchResults.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
                       {searchResults.map(song => (
                         <SongCard key={song.id} song={song} />
                       ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                        <Search size={32} className="text-white/20" />
+                      </div>
+                      <h3 className="text-xl font-bold mb-2">No results found</h3>
+                      <p className="text-white/40 max-w-xs">
+                        We couldn't find any songs matching your search. Try different keywords or check your spelling.
+                      </p>
                     </div>
                   )}
                 </motion.div>
