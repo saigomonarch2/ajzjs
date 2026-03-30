@@ -1,0 +1,5 @@
+{
+  "name": "SonicStream",
+  "description": "An immersive music player powered by YouTube with playlist management and favorites.",
+  "requestFramePermissions": []
+}

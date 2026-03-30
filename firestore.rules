@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - displayName: string
+    //   - photoURL: string
+    //   - role: string (enum: ['user', 'admin'])
+    //
+    // Collection: playlists
+    // Fields:
+    //   - userId: string (required)
+    //   - name: string (required, max 50 chars)
+    //   - songs: list (required, max 100 items)
+    //   - createdAt: timestamp
+    //
+    // Collection: favorites
+    // Fields:
+    //   - userId: string (required)
+    //   - song: map (required)
+    //   - createdAt: timestamp
+    //
+    // Collection: history
+    // Fields:
+    //   - userId: string (required)
+    //   - song: map (required)
+    //   - playedAt: timestamp
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (request.auth.token.email == "shubhamnm671@gmail.com" ||
+         request.auth.token.email == "saigomonarch0@gmail.com" ||
+         request.auth.uid == "eT2K8BeDAcfa53mI8Z1zhV9mKwj2" ||
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'role']) &&
+             data.uid is string && data.email is string && isValidEmail(data.email) &&
+             (data.role in ['user', 'admin'] || !('role' in data));
+    }
+
+    function isValidPlaylist(data) {
+      return data.keys().hasOnly(['userId', 'name', 'songs', 'createdAt']) &&
+             data.userId is string && data.name is string && data.name.size() > 0 && data.name.size() <= 50 &&
+             data.songs is list && data.songs.size() <= 100 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidFavorite(data) {
+      return data.keys().hasOnly(['userId', 'song', 'createdAt']) &&
+             data.userId is string && data.song is map &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidHistory(data) {
+      return data.keys().hasOnly(['userId', 'song', 'playedAt']) &&
+             data.userId is string && data.song is map &&
+             data.playedAt is timestamp;
+    }
+
+    function isValidApiKey(data) {
+      return data.key is string && data.key.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.createdAt is timestamp &&
+             data.createdBy is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /playlists/{playlistId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidPlaylist(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidPlaylist(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /favorites/{favoriteId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidFavorite(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /history/{historyId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidHistory(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /apiKeys/{keyId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidApiKey(request.resource.data);
+      allow update: if isAdmin() && isValidApiKey(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] }
+      },
+      "required": ["uid", "email"]
+    },
+    "Playlist": {
+      "title": "Playlist",
+      "description": "User created playlists",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "songs": {
+          "type": "array",
+          "items": { "$ref": "Song" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "songs"]
+    },
+    "Song": {
+      "title": "Song",
+      "description": "YouTube song metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "thumbnail": { "type": "string" },
+        "duration": { "type": "string" },
+        "author": { "type": "string" }
+      },
+      "required": ["id", "title"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "User favorite songs",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "song": { "$ref": "Song" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "song"]
+    },
+    "History": {
+      "title": "History",
+      "description": "User play history",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "song": { "$ref": "Song" },
+        "playedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "song", "playedAt"]
+    },
+    "ApiKey": {
+      "title": "ApiKey",
+      "description": "External API keys for streaming",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["key", "name", "createdAt", "createdBy"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/playlists/{playlistId}": {
+      "schema": "Playlist",
+      "description": "User playlists"
+    },
+    "/favorites/{favoriteId}": {
+      "schema": "Favorite",
+      "description": "User favorites"
+    },
+    "/history/{historyId}": {
+      "schema": "History",
+      "description": "User play history"
+    },
+    "/apiKeys/{keyId}": {
+      "schema": "ApiKey",
+      "description": "External API keys"
+    }
+  }
+}
