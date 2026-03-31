@@ -122,7 +122,7 @@ function CMusicApp() {
           try {
             const response = await axios.get(`/api/song/${vidId}`);
             setCurrentSong(response.data);
-            // Don't set isPlaying to true automatically to avoid autoplay blocks
+            setIsPlaying(true); // Enable autoplay when loading from URL
           } catch (error) {
             console.error("Failed to load song from URL:", error);
           }
@@ -386,18 +386,23 @@ function CMusicApp() {
     }
   };
 
-  const handleImportPlaylist = async () => {
-    if (!user || !importUrl.trim()) return;
+  const handleImportPlaylist = async (urlOverride?: any) => {
+    const urlToImport = typeof urlOverride === 'string' ? urlOverride : importUrl;
+    if (!user || !urlToImport.trim()) return;
+    
+    console.log(`Frontend: Importing playlist from URL: "${urlToImport}"`);
     setIsImporting(true);
     setImportError(null);
     try {
-      const response = await axios.get(`/api/playlist?url=${encodeURIComponent(importUrl)}`);
+      const response = await axios.get(`/api/playlist?url=${encodeURIComponent(urlToImport)}`);
+      console.log(`Frontend: Playlist data received:`, response.data);
       const { title, songs } = response.data;
       
       if (!songs || songs.length === 0) {
         throw new Error("This playlist is empty or could not be read.");
       }
 
+      console.log(`Frontend: Adding playlist "${title}" with ${songs.length} songs to Firestore...`);
       await addDoc(collection(db, 'playlists'), {
         userId: user.uid,
         name: title || "Imported Playlist",
@@ -405,10 +410,11 @@ function CMusicApp() {
         createdAt: serverTimestamp()
       });
       
+      console.log(`Frontend: Playlist imported successfully!`);
       setImportUrl('');
       setShowImportModal(false);
     } catch (error: any) {
-      console.error("Import error:", error);
+      console.error("Frontend: Import error:", error);
       const message = error.response?.data?.error || error.message || "Failed to import playlist";
       setImportError(message);
     } finally {
@@ -486,7 +492,7 @@ function CMusicApp() {
     addToPlaylist,
     removeFromPlaylist,
     deletePlaylist,
-    importPlaylist: async (url) => { setImportUrl(url); await handleImportPlaylist(); }
+    importPlaylist: async (url) => { setImportUrl(url); await handleImportPlaylist(url); }
   };
 
   if (loading) {

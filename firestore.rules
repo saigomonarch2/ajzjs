@@ -70,8 +70,8 @@ service cloud.firestore {
 
     function isValidPlaylist(data) {
       return data.keys().hasOnly(['userId', 'name', 'songs', 'createdAt']) &&
-             data.userId is string && data.name is string && data.name.size() > 0 && data.name.size() <= 50 &&
-             data.songs is list && data.songs.size() <= 100 &&
+             data.userId is string && data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.songs is list && data.songs.size() <= 1000 &&
              data.createdAt is timestamp;
     }
 

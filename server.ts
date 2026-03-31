@@ -131,6 +131,7 @@ async function startServer() {
 
   app.get("/api/playlist", async (req, res) => {
     const url = req.query.url as string;
+    console.log(`Playlist import request received for URL: "${url}"`);
     if (!url) return res.status(400).json({ error: "Playlist URL is required" });
 
     try {
@@ -138,24 +139,35 @@ async function startServer() {
       const playlistIdMatch = url.match(/[&?]list=([^&]+)/);
       let playlistId = playlistIdMatch ? playlistIdMatch[1] : url.trim();
 
+      console.log(`Extracted playlist ID: "${playlistId}"`);
+
       // Basic validation: YouTube playlist IDs are usually 18, 24, or 34 characters
       // but can vary. They often start with PL, UU, LL, RD, etc.
       if (!playlistId || playlistId.length < 10) {
+        console.log(`Invalid playlist ID: "${playlistId}"`);
         return res.status(400).json({ error: "Invalid YouTube playlist URL or ID. Please make sure it contains a 'list=' parameter." });
       }
 
       // Handle Mix playlists (RD...)
       if (playlistId.startsWith('RD')) {
+        console.log(`Mix playlist detected: "${playlistId}"`);
         return res.status(400).json({ 
           error: "YouTube 'Mix' playlists are dynamic and generated specifically for your session. They cannot be imported by third-party apps. Please try a standard playlist (usually starts with 'PL')." 
         });
       }
 
-      console.log(`Fetching playlist: ${playlistId}`);
+      console.log(`Calling yts for playlist: ${playlistId}`);
       
       const r = await yts({ listId: playlistId });
       
-      if (!r || !r.videos || r.videos.length === 0) {
+      if (!r) {
+        console.log(`yts returned null for playlist: ${playlistId}`);
+        return res.status(404).json({ error: "Playlist not found on YouTube." });
+      }
+
+      console.log(`yts returned playlist: "${r.title}" with ${r.videos?.length || 0} videos`);
+      
+      if (!r.videos || r.videos.length === 0) {
         return res.status(400).json({ 
           error: "No videos found in this playlist. It might be empty, private, or restricted by YouTube." 
         });
@@ -165,13 +177,15 @@ async function startServer() {
         id: r.listId || playlistId,
         title: r.title || "Untitled Playlist",
         author: r.author?.name || "Unknown Author",
-        songs: r.videos.map(v => ({
-          id: v.videoId,
-          title: v.title,
-          thumbnail: v.thumbnail,
-          duration: v.timestamp,
-          author: v.author?.name || "Unknown Author"
-        }))
+        songs: r.videos
+          .filter(v => v.videoId && v.title)
+          .map(v => ({
+            id: v.videoId,
+            title: v.title,
+            thumbnail: v.thumbnail || "https://picsum.photos/seed/music/400/400",
+            duration: v.timestamp || "0:00",
+            author: v.author?.name || "Unknown Author"
+          }))
       };
       res.json(playlist);
     } catch (error: any) {
@@ -184,7 +198,7 @@ async function startServer() {
         });
       }
       
-      res.status(500).json({ error: "An unexpected error occurred while fetching the playlist. Please try again later." });
+      res.status(500).json({ error: `An unexpected error occurred: ${message}` });
     }
   });
 
