@@ -61,19 +61,30 @@ async function startServer() {
 
   // External API Routes (Protected by API Key)
   app.get("/api/v1/search", validateApiKey, async (req, res) => {
-    const query = req.query.q as string;
-    if (!query) return res.status(400).json({ error: "Query is required" });
+    let queryStr = req.query.q as string;
+    if (!queryStr) return res.status(400).json({ error: "Query is required" });
+
+    // Append "music" to guide search towards songs if not already present
+    const enhancedQuery = queryStr.toLowerCase().includes('music') ? queryStr : `${queryStr} music`;
 
     try {
-      const r = await yts(query);
-      const videos = r.videos.slice(0, 20).map(v => ({
-        id: v.videoId,
-        title: v.title,
-        thumbnail: v.thumbnail,
-        duration: v.timestamp,
-        author: v.author.name,
-        url: v.url
-      }));
+      const r = await yts(enhancedQuery);
+      // Filter out shorts (usually < 60s) and videos with "shorts" in title
+      const videos = r.videos
+        .filter(v => {
+          const isShort = v.seconds < 60;
+          const hasShortsInTitle = v.title.toLowerCase().includes('shorts');
+          return !isShort && !hasShortsInTitle;
+        })
+        .slice(0, 20)
+        .map(v => ({
+          id: v.videoId,
+          title: v.title,
+          thumbnail: v.thumbnail,
+          duration: v.timestamp,
+          author: v.author.name,
+          url: v.url
+        }));
       res.json({
         success: true,
         data: videos
@@ -107,21 +118,33 @@ async function startServer() {
 
   // Internal API Routes (Used by the web app)
   app.get("/api/search", async (req, res) => {
-    const query = req.query.q as string;
-    console.log(`Search request received for: "${query}"`);
-    if (!query) return res.status(400).json({ error: "Query is required" });
+    const queryStr = req.query.q as string;
+    console.log(`Search request received for: "${queryStr}"`);
+    if (!queryStr) return res.status(400).json({ error: "Query is required" });
+
+    // Append "music" to guide search towards songs if not already present
+    const enhancedQuery = queryStr.toLowerCase().includes('music') ? queryStr : `${queryStr} music`;
 
     try {
-      const r = await yts(query);
+      const r = await yts(enhancedQuery);
       console.log(`Search results found: ${r.videos.length} videos`);
-      const videos = r.videos.slice(0, 20).map(v => ({
-        id: v.videoId,
-        title: v.title,
-        thumbnail: v.thumbnail,
-        duration: v.timestamp,
-        author: v.author.name,
-        url: v.url
-      }));
+      
+      // Filter out shorts (usually < 60s) and videos with "shorts" in title
+      const videos = r.videos
+        .filter(v => {
+          const isShort = v.seconds < 60;
+          const hasShortsInTitle = v.title.toLowerCase().includes('shorts');
+          return !isShort && !hasShortsInTitle;
+        })
+        .slice(0, 20)
+        .map(v => ({
+          id: v.videoId,
+          title: v.title,
+          thumbnail: v.thumbnail,
+          duration: v.timestamp,
+          author: v.author.name,
+          url: v.url
+        }));
       res.json(videos);
     } catch (error) {
       console.error("Search error details:", error);
