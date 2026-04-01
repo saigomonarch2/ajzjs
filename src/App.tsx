@@ -43,6 +43,8 @@ interface AppContextType {
   removeFromPlaylist: (playlistId: string, songId: string) => Promise<void>;
   deletePlaylist: (playlistId: string) => Promise<void>;
   importPlaylist: (url: string) => Promise<void>;
+  setShowPlaylistModal: (show: boolean) => void;
+  setShowImportModal: (show: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -92,6 +94,9 @@ function CMusicApp() {
   const playerRef = useRef<any>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -111,6 +116,39 @@ function CMusicApp() {
       }
     }
   }, [currentSong, navigate, location.pathname]);
+
+  // Track player progress
+  useEffect(() => {
+    let interval: any;
+    if (isPlaying && playerReady && playerRef.current) {
+      interval = setInterval(() => {
+        const time = playerRef.current.getCurrentTime();
+        const dur = playerRef.current.getDuration();
+        setCurrentTime(time);
+        setDuration(dur);
+      }, 500);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying, playerReady]);
+
+  const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!playerRef.current || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    const seekTime = percentage * duration;
+    playerRef.current.seekTo(seekTime, true);
+    setCurrentTime(seekTime);
+  };
 
   // Load song from URL on initial load
   useEffect(() => {
@@ -492,7 +530,9 @@ function CMusicApp() {
     addToPlaylist,
     removeFromPlaylist,
     deletePlaylist,
-    importPlaylist: async (url) => { setImportUrl(url); await handleImportPlaylist(url); }
+    importPlaylist: async (url) => { setImportUrl(url); await handleImportPlaylist(url); },
+    setShowPlaylistModal,
+    setShowImportModal
   };
 
   if (loading) {
@@ -1145,11 +1185,17 @@ function CMusicApp() {
             </div>
             
             <div className="w-full max-w-md hidden sm:flex items-center gap-3">
-              <span className="text-[10px] text-white/30 font-mono">0:00</span>
-              <div className="flex-1 h-1 bg-white/10 rounded-full relative overflow-hidden group cursor-pointer">
-                <div className="absolute top-0 left-0 h-full w-1/3 bg-[#ff4e00] rounded-full group-hover:bg-[#ff6a2a] transition-colors" />
+              <span className="text-[10px] text-white/30 font-mono">{formatTime(currentTime)}</span>
+              <div 
+                className="flex-1 h-1 bg-white/10 rounded-full relative overflow-hidden group cursor-pointer"
+                onClick={handleSeek}
+              >
+                <div 
+                  className="absolute top-0 left-0 h-full bg-[#ff4e00] rounded-full group-hover:bg-[#ff6a2a] transition-all" 
+                  style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+                />
               </div>
-              <span className="text-[10px] text-white/30 font-mono">{currentSong?.duration || "0:00"}</span>
+              <span className="text-[10px] text-white/30 font-mono">{formatTime(duration) || currentSong?.duration || "0:00"}</span>
             </div>
           </div>
 
@@ -1160,8 +1206,13 @@ function CMusicApp() {
                 <div className="absolute top-0 left-0 h-full w-2/3 bg-white/40 rounded-full group-hover:bg-white transition-colors" />
               </div>
             </div>
-            <button className="p-2 text-white/40 hover:text-white transition-colors">
+            <button 
+              onClick={() => setShowDetailsModal(true)}
+              className="p-2 text-white/40 hover:text-white transition-colors flex items-center gap-2"
+              title="More Details"
+            >
               <Menu size={20} />
+              <span className="text-xs font-medium hidden lg:inline">Details</span>
             </button>
           </div>
         </footer>
@@ -1287,6 +1338,51 @@ function CMusicApp() {
             </button>
           </div>
         </Modal>
+
+        <Modal show={showDetailsModal} onClose={() => setShowDetailsModal(false)} title="Song Details">
+          {currentSong ? (
+            <div className="space-y-6">
+              <div className="aspect-video rounded-2xl overflow-hidden shadow-2xl">
+                <img src={currentSong.thumbnail} alt={currentSong.title} className="w-full h-full object-cover" />
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-xl font-bold">{currentSong.title}</h4>
+                <p className="text-[#ff4e00] font-medium">{currentSong.author}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <p className="text-[10px] uppercase tracking-widest text-white/30 mb-1">Duration</p>
+                  <p className="font-mono text-sm">{formatTime(duration) || currentSong.duration}</p>
+                </div>
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  <p className="text-[10px] uppercase tracking-widest text-white/30 mb-1">Source</p>
+                  <p className="text-sm">YouTube</p>
+                </div>
+              </div>
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                <p className="text-[10px] uppercase tracking-widest text-white/30 mb-1">Video ID</p>
+                <p className="font-mono text-xs text-white/60">{currentSong.id}</p>
+              </div>
+              <button 
+                onClick={() => {
+                  const isFav = favorites.some(f => f.song.id === currentSong.id);
+                  isFav ? removeFromFavorites(currentSong.id) : addToFavorites(currentSong);
+                }}
+                className={cn(
+                  "w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2",
+                  favorites.some(f => f.song.id === currentSong.id) 
+                    ? "bg-[#ff4e00]/10 text-[#ff4e00] border border-[#ff4e00]/20" 
+                    : "bg-white text-black hover:bg-white/90"
+                )}
+              >
+                <Heart size={18} fill={favorites.some(f => f.song.id === currentSong.id) ? "currentColor" : "none"} />
+                {favorites.some(f => f.song.id === currentSong.id) ? "In Favorites" : "Add to Favorites"}
+              </button>
+            </div>
+          ) : (
+            <p className="text-center text-white/40 py-8">No song selected</p>
+          )}
+        </Modal>
       </div>
     </AppContext.Provider>
   );
@@ -1310,7 +1406,7 @@ function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode, 
 }
 
 function SongCard({ song, playlistId, ...props }: { song: Song, playlistId?: string, [key: string]: any }) {
-  const { setCurrentSong, setIsPlaying, currentSong, isPlaying, addToFavorites, removeFromFavorites, favorites, playlists, addToPlaylist, removeFromPlaylist } = useApp();
+  const { setCurrentSong, setIsPlaying, currentSong, isPlaying, addToFavorites, removeFromFavorites, favorites, playlists, addToPlaylist, removeFromPlaylist, setShowPlaylistModal } = useApp();
   const [showOptions, setShowOptions] = useState(false);
   
   const isCurrent = currentSong?.id === song.id;
@@ -1390,7 +1486,17 @@ function SongCard({ song, playlistId, ...props }: { song: Song, playlistId?: str
                     {p.name}
                   </button>
                 ))}
+                {playlists.length === 0 && (
+                  <p className="px-4 py-2 text-[10px] text-white/20 italic">No playlists yet</p>
+                )}
               </div>
+              <button 
+                onClick={() => { setShowPlaylistModal(true); setShowOptions(false); }}
+                className="w-full text-left px-4 py-2 text-[10px] sm:text-xs text-[#ff4e00] hover:bg-[#ff4e00]/10 transition-colors border-t border-white/10 mt-1 flex items-center gap-2"
+              >
+                <Plus size={12} />
+                Create New Playlist
+              </button>
               {playlistId && (
                 <button 
                   onClick={() => { removeFromPlaylist(playlistId, song.id); setShowOptions(false); }}
